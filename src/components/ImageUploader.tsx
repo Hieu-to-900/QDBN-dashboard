@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { uploadData } from 'aws-amplify/storage';
+import { uploadFile } from '../services/uploadService';
 import { 
   validateFile, 
-  generateSecureUploadPath, 
   UploadRateLimiter,
   DEFAULT_SECURITY_CONFIG
 } from '../utils/security';
@@ -25,37 +24,32 @@ interface ImageUploaderProps {
 
 const ImageUploader: React.FC<ImageUploaderProps> = ({
   onUploadComplete,
-  maxFileSize = 5 * 1024 * 1024, // 5MB default
-  allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+  maxFileSize = 10 * 1024 * 1024, // 10MB default
+  allowedTypes = [
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  ],
 }) => {
   const [rateLimiter] = useState(() => new UploadRateLimiter(10, 1)); // 10 uploads per minute
 
   const uploadToS3 = async (file: File): Promise<UploadedImage> => {
     const fileId = crypto.randomUUID();
-    const securePath = generateSecureUploadPath(file.name);
 
     try {
-      const result = await uploadData({
-        key: securePath,
-        data: file,
-        options: {
-          contentType: file.type,
-          metadata: {
-            originalName: file.name,
-            uploadedBy: 'anonymous',
-            uploadedAt: new Date().toISOString(),
-            fileSize: file.size.toString(),
-            securityValidated: 'true'
-          }
-        }
-      }).result;
+      // Upload file sử dụng API mới (2 bước: lấy presigned URL + PUT file)
+      const { s3_key } = await uploadFile(file);
 
       rateLimiter.recordUpload();
 
       const uploadedImage = {
         id: fileId,
         name: file.name,
-        url: result.key,
+        url: s3_key,
         size: file.size,
         uploadedAt: new Date(),
         status: 'success' as const
@@ -111,6 +105,13 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
         await uploadToS3(file);
       } catch (error) {
         // Error is handled inside uploadToS3
+        const errorMessage = error instanceof Error ? error.message : 'Upload failed';
+        console.error('Upload error for', file.name, ':', errorMessage);
+        
+        // Show detailed error message
+        if (errorMessage.includes('CORS') || errorMessage.includes('NetworkError')) {
+          alert(`CORS Error: Unable to upload ${file.name}. Please check:\n- API Gateway CORS configuration\n- S3 bucket CORS policy\n- Network connection`);
+        }
       }
     }
   };
@@ -118,7 +119,12 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
   const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDrop: handleFileDrop,
     accept: {
-      'image/*': allowedTypes.map(type => `.${type.split('/')[1]}`)
+      'image/jpeg': ['.jpg', '.jpeg'],
+      'image/png': ['.png'],
+      'image/gif': ['.gif'],
+      'image/webp': ['.webp'],
+      'application/pdf': ['.pdf'],
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx']
     },
     maxSize: maxFileSize,
     multiple: true,

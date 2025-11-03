@@ -15,8 +15,16 @@ export interface SecurityConfig {
 
 export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
   maxFileSize: 10 * 1024 * 1024, // 10MB
-  allowedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
-  allowedExtensions: ['.jpg', '.jpeg', '.png', '.gif', '.webp'],
+  allowedMimeTypes: [
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  ],
+  allowedExtensions: ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf', '.docx'],
   maxFilesPerUpload: 5,
   scanForMalware: false
 };
@@ -107,9 +115,10 @@ export function validateFileType(file: File, config: SecurityConfig): FileValida
 }
 
 /**
- * Basic image file header validation to prevent disguised files
+ * File header validation to prevent disguised files
+ * Supports: Images (JPEG, PNG, GIF, WebP), PDF, DOCX
  */
-export function validateImageHeader(file: File): Promise<FileValidationResult> {
+export function validateFileHeader(file: File): Promise<FileValidationResult> {
   return new Promise((resolve) => {
     const reader = new FileReader();
     
@@ -117,44 +126,60 @@ export function validateImageHeader(file: File): Promise<FileValidationResult> {
       const arrayBuffer = e.target?.result as ArrayBuffer;
       const uint8Array = new Uint8Array(arrayBuffer);
       
-      // Check for common image file signatures
+      // File signatures (magic bytes)
       const signatures = {
         jpeg: [0xFF, 0xD8, 0xFF],
         png: [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],
         gif: [0x47, 0x49, 0x46, 0x38],
-        webp: [0x52, 0x49, 0x46, 0x46] // RIFF header
+        webp: [0x52, 0x49, 0x46, 0x46], // RIFF header
+        pdf: [0x25, 0x50, 0x44, 0x46], // %PDF
+        docx: [0x50, 0x4B, 0x03, 0x04] // PK.. (ZIP format used by DOCX)
       };
 
-      let isValidImage = false;
+      let isValid = false;
       
       // Check JPEG
       if (uint8Array.length >= 3 && 
           uint8Array[0] === signatures.jpeg[0] && 
           uint8Array[1] === signatures.jpeg[1] && 
           uint8Array[2] === signatures.jpeg[2]) {
-        isValidImage = true;
+        isValid = true;
       }
       
       // Check PNG
       if (uint8Array.length >= 8 && 
           signatures.png.every((byte, index) => uint8Array[index] === byte)) {
-        isValidImage = true;
+        isValid = true;
       }
       
       // Check GIF
       if (uint8Array.length >= 4 && 
           signatures.gif.every((byte, index) => uint8Array[index] === byte)) {
-        isValidImage = true;
+        isValid = true;
       }
       
       // Check WebP (simplified check for RIFF header)
       if (uint8Array.length >= 4 && 
           signatures.webp.every((byte, index) => uint8Array[index] === byte)) {
-        isValidImage = true;
+        isValid = true;
       }
 
-      if (!isValidImage) {
-        resolve({ isValid: false, error: 'File does not appear to be a valid image' });
+      // Check PDF
+      if (uint8Array.length >= 4 && 
+          signatures.pdf.every((byte, index) => uint8Array[index] === byte)) {
+        isValid = true;
+      }
+
+      // Check DOCX (ZIP format)
+      if (uint8Array.length >= 4 && 
+          signatures.docx.every((byte, index) => uint8Array[index] === byte)) {
+        // Additional check: DOCX files should have specific internal structure
+        // For now, we accept all ZIP files with .docx extension
+        isValid = true;
+      }
+
+      if (!isValid) {
+        resolve({ isValid: false, error: 'File does not appear to be a valid file format' });
       } else {
         resolve({ isValid: true });
       }
@@ -215,8 +240,8 @@ export async function validateFile(file: File, config: SecurityConfig = DEFAULT_
     return typeValidation;
   }
 
-  // Validate image header
-  const headerValidation = await validateImageHeader(file);
+  // Validate file header
+  const headerValidation = await validateFileHeader(file);
   if (!headerValidation.isValid) {
     return headerValidation;
   }
