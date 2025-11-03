@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CORS Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            background: #f3f4f6;
+        }
+        .success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        .error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        pre {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 CORS Test Tool</h1>
+    
+    <h2>Test 1: API Gateway CORS</h2>
+    <button onclick="testAPIGateway()">Test API Gateway</button>
+    <div id="apiResult" class="result" style="display: none;"></div>
+
+    <h2>Test 2: Complete Upload Flow</h2>
+    <input type="file" id="testFile" accept=".pdf,.jpg,.png,.docx">
+    <button onclick="testUploadFlow()">Test Upload</button>
+    <div id="uploadResult" class="result" style="display: none;"></div>
+
+    <h2>Test 3: OPTIONS Preflight</h2>
+    <button onclick="testPreflight()">Test Preflight</button>
+    <div id="preflightResult" class="result" style="display: none;"></div>
+
+    <script>
+        const API_URL = 'https://8i4yru0v8j.execute-api.ap-southeast-1.amazonaws.com/upload-url';
+
+        async function testAPIGateway() {
+            const resultDiv = document.getElementById('apiResult');
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'result';
+            resultDiv.innerHTML = '<p>Testing API Gateway...</p>';
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    mode: 'cors',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        fileName: 'test.pdf',
+                        fileType: 'application/pdf'
+                    })
+                });
+
+                const data = await response.json();
+                
+                resultDiv.className = 'result success';
+                resultDiv.innerHTML = `
+                    <h3>✅ Success!</h3>
+                    <p><strong>Status:</strong> ${response.status}</p>
+                    <p><strong>Response Headers:</strong></p>
+                    <pre>${JSON.stringify(Object.fromEntries(response.headers), null, 2)}</pre>
+                    <p><strong>Response Body:</strong></p>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `
+                    <h3>❌ Error!</h3>
+                    <p><strong>Error:</strong> ${error.message}</p>
+                    <p><strong>Type:</strong> ${error.name}</p>
+                    <p>This is likely a CORS error. Check console for details.</p>
+                `;
+                console.error('API Gateway Error:', error);
+            }
+        }
+
+        async function testUploadFlow() {
+            const resultDiv = document.getElementById('uploadResult');
+            const fileInput = document.getElementById('testFile');
+            
+            if (!fileInput.files || !fileInput.files[0]) {
+                alert('Please select a file first!');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'result';
+            resultDiv.innerHTML = '<p>Step 1: Getting upload URL...</p>';
+
+            try {
+                // Step 1: Get presigned URL
+                const urlResponse = await fetch(API_URL, {
+                    method: 'POST',
+                    mode: 'cors',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        fileName: file.name,
+                        fileType: file.type
+                    })
+                });
+
+                if (!urlResponse.ok) {
+                    throw new Error(`Failed to get upload URL: ${urlResponse.statusText}`);
+                }
+
+                const { upload_url, s3_key } = await urlResponse.json();
+                
+                resultDiv.innerHTML += '<p>✅ Got upload URL</p>';
+                resultDiv.innerHTML += '<p>Step 2: Uploading file to S3...</p>';
+
+                // Step 2: Upload to S3
+                const uploadResponse = await fetch(upload_url, {
+                    method: 'PUT',
+                    body: file,
+                    headers: {
+                        'Content-Type': file.type,
+                    }
+                });
+
+                if (!uploadResponse.ok) {
+                    throw new Error(`Failed to upload: ${uploadResponse.statusText}`);
+                }
+
+                resultDiv.className = 'result success';
+                resultDiv.innerHTML = `
+                    <h3>✅ Upload Successful!</h3>
+                    <p><strong>File:</strong> ${file.name}</p>
+                    <p><strong>Size:</strong> ${(file.size / 1024).toFixed(2)} KB</p>
+                    <p><strong>Type:</strong> ${file.type}</p>
+                    <p><strong>S3 Key:</strong> ${s3_key}</p>
+                    <p><strong>Upload Status:</strong> ${uploadResponse.status}</p>
+                `;
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `
+                    <h3>❌ Upload Failed!</h3>
+                    <p><strong>Error:</strong> ${error.message}</p>
+                    <p><strong>Type:</strong> ${error.name}</p>
+                    <p>Check console for more details.</p>
+                `;
+                console.error('Upload Error:', error);
+            }
+        }
+
+        async function testPreflight() {
+            const resultDiv = document.getElementById('preflightResult');
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'result';
+            resultDiv.innerHTML = '<p>Testing OPTIONS preflight...</p>';
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'OPTIONS',
+                    mode: 'cors',
+                    headers: {
+                        'Access-Control-Request-Method': 'POST',
+                        'Access-Control-Request-Headers': 'Content-Type',
+                        'Origin': window.location.origin
+                    }
+                });
+
+                const allowOrigin = response.headers.get('Access-Control-Allow-Origin');
+                const allowMethods = response.headers.get('Access-Control-Allow-Methods');
+                const allowHeaders = response.headers.get('Access-Control-Allow-Headers');
+
+                resultDiv.className = 'result success';
+                resultDiv.innerHTML = `
+                    <h3>✅ Preflight Response</h3>
+                    <p><strong>Status:</strong> ${response.status}</p>
+                    <p><strong>Access-Control-Allow-Origin:</strong> ${allowOrigin || '❌ Missing'}</p>
+                    <p><strong>Access-Control-Allow-Methods:</strong> ${allowMethods || '❌ Missing'}</p>
+                    <p><strong>Access-Control-Allow-Headers:</strong> ${allowHeaders || '❌ Missing'}</p>
+                    <p><strong>All Headers:</strong></p>
+                    <pre>${JSON.stringify(Object.fromEntries(response.headers), null, 2)}</pre>
+                `;
+
+                if (!allowOrigin || !allowMethods) {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML += '<p><strong>⚠️ Warning:</strong> Missing required CORS headers!</p>';
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `
+                    <h3>❌ Preflight Failed!</h3>
+                    <p><strong>Error:</strong> ${error.message}</p>
+                    <p>The server may not support OPTIONS method or CORS is not configured.</p>
+                `;
+                console.error('Preflight Error:', error);
+            }
+        }
+
+        // Log initial info
+        console.log('CORS Test Tool Ready');
+        console.log('API URL:', API_URL);
+        console.log('Origin:', window.location.origin);
+    </script>
+</body>
+</html>

@@ -1,9 +1,9 @@
-# Hướng dẫn cài đặt và sử dụng AWS S3 Image Uploader
+# Hướng dẫn cài đặt và sử dụng AWS S3 File Upload Widget
 
 ## 📋 Mục lục
 1. [Cài đặt ban đầu](#cài-đặt-ban-đầu)
-2. [Cấu hình AWS](#cấu-hình-aws)
-3. [Deploy application](#deploy-application)
+2. [Cấu hình API](#cấu-hình-api)
+3. [Chạy application](#chạy-application)
 4. [Hướng dẫn sử dụng](#hướng-dẫn-sử-dụng)
 5. [Tùy chỉnh](#tùy-chỉnh)
 6. [Troubleshooting](#troubleshooting)
@@ -16,77 +16,69 @@
 - Node.js >= 18.0.0
 - npm >= 8.0.0  
 - Git
-- AWS CLI (khuyến nghị)
 
 ### Bước 2: Clone project
 
 ```bash
 git clone <repository-url>
-cd aws-s3-image-uploader
+cd aws-s3-file-uploader
 npm install
 ```
 
-### Bước 3: Cài đặt Amplify CLI
+## ☁️ Cấu hình API
+
+### API Endpoint
+
+Application sử dụng AWS API Gateway để lấy presigned URL và upload file lên S3.
+
+**API Base URL**: `https://8i4yru0v8j.execute-api.ap-southeast-1.amazonaws.com`
+
+### Quy trình upload (2 bước)
+
+#### Bước 1: Lấy presigned URL
 
 ```bash
-npm install -g @aws-amplify/cli
+POST https://8i4yru0v8j.execute-api.ap-southeast-1.amazonaws.com/upload-url
+
+Content-Type: application/json
+
+{
+  "fileName": "example.pdf",
+  "fileType": "application/pdf"
+}
 ```
 
-## ☁️ Cấu hình AWS
+**Response:**
+```json
+{
+  "upload_url": "https://qdbn-docs-hieu-2025.s3.amazonaws.com/example.pdf?AWSAccessKeyId=...",
+  "s3_key": "example.pdf",
+  "message": "Sử dụng URL này với HTTP PUT để upload file."
+}
+```
 
-### Bước 1: Cấu hình AWS credentials
+#### Bước 2: Upload file lên S3
 
 ```bash
-amplify configure
+PUT https://qdbn-docs-hieu-2025.s3.amazonaws.com/example.pdf?AWSAccessKeyId=...
+
+Content-Type: application/pdf
+Body: [binary file data]
 ```
 
-Làm theo hướng dẫn để:
-1. Đăng nhập AWS Console
-2. Tạo IAM user với quyền phù hợp
-3. Cấu hình Access Key ID và Secret Access Key
+**Response**: `200 OK`
 
-### Bước 2: Khởi tạo Amplify project
+### Cấu hình trong code
 
-```bash
-amplify init
+Nếu cần thay đổi API endpoint, mở file `src/services/uploadService.ts`:
+
+```typescript
+const API_BASE_URL = 'https://your-api-gateway-url.amazonaws.com';
 ```
 
-Chọn các tùy chọn:
-- Project name: `s3-image-uploader`
-- Environment: `dev`
-- Default editor: `Visual Studio Code`
-- App type: `javascript`
-- Framework: `react`
-- Source directory: `src`
-- Distribution directory: `dist`
-- Build command: `npm run build`
-- Start command: `npm run dev`
+## 🚀 Chạy application
 
-### Bước 3: Add Storage (S3)
-
-```bash
-amplify add storage
-```
-
-Cấu hình:
-- Select from one of the below mentioned services: `Content (Images, audio, video, etc.)`
-- Provide a friendly name: `imageStorage`
-- Provide bucket name: `<unique-bucket-name>`
-- Who should have access: `Auth and guest users`
-- What kind of access do you want for Authenticated users: `create/update, read, delete`
-- What kind of access do you want for Guest users: `create/update, read`
-
-## 🚀 Deploy application
-
-### Bước 1: Deploy backend
-
-```bash
-amplify push
-```
-
-Xác nhận các thay đổi và đợi deployment hoàn thành.
-
-### Bước 2: Chạy development server
+### Chạy development server
 
 ```bash
 npm run dev
@@ -94,19 +86,18 @@ npm run dev
 
 Ứng dụng sẽ chạy tại `http://localhost:5173`
 
-### Bước 3: Deploy frontend (tùy chọn)
+### Build production
 
 ```bash
-amplify add hosting
+npm run build
 ```
 
-Chọn:
-- Select the plugin module: `Hosting with Amplify Console`
-- Choose a type: `Manual deployment`
+Output sẽ được tạo trong thư mục `dist/`
 
-Sau đó:
+### Preview production build
+
 ```bash
-amplify publish
+npm run preview
 ```
 
 ## 🎯 Hướng dẫn sử dụng
@@ -133,10 +124,15 @@ amplify publish
 
 ### Các định dạng hỗ trợ
 
+#### Hình ảnh
 - **JPEG** (.jpg, .jpeg)
 - **PNG** (.png)
 - **GIF** (.gif)
 - **WebP** (.webp)
+
+#### Tài liệu
+- **PDF** (.pdf)
+- **Word Document** (.docx)
 
 ### Giới hạn upload
 

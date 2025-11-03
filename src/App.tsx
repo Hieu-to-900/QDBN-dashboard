@@ -43,12 +43,24 @@ function App() {
           <div style={{ padding: '2rem 3rem' }}>
             <p style={{ color: '#374151', fontSize: '0.875rem', marginBottom: '1.5rem', lineHeight: '1.625' }}>
               File Upload widget with multiple file selection, drag&drop support. You can drag & drop files from your desktop on this webpage.
+              <br />
+              <span style={{ color: '#6b7280', fontSize: '0.75rem', marginTop: '0.5rem', display: 'block' }}>
+                Supported: JPG, PNG, GIF, WebP, PDF, DOCX (Max 10MB)
+              </span>
             </p>
             
             <ImageUploader 
               onUploadComplete={handleUploadUpdate}
               maxFileSize={10 * 1024 * 1024}
-              allowedTypes={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
+              allowedTypes={[
+                'image/jpeg',
+                'image/jpg', 
+                'image/png',
+                'image/gif',
+                'image/webp',
+                'application/pdf',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+              ]}
             />
             
             {uploadedImages.length > 0 && (

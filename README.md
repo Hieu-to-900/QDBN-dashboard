@@ -1,34 +1,31 @@
-# AWS S3 Image Uploader
+# AWS S3 File Upload Widget
 
-Ứng dụng upload ảnh hiện đại và bảo mật lên Amazon S3 sử dụng React, TypeScript, Vite và AWS Amplify.
+Ứng dụng upload file hiện đại và bảo mật lên Amazon S3 sử dụng React, TypeScript, Vite và AWS API Gateway.
 
 ## 🚀 Tính năng chính
 
 - ✅ **Drag & Drop Interface**: Giao diện kéo thả trực quan
 - ✅ **Click to Upload**: Fallback cho việc chọn file thủ công  
 - ✅ **Security First**: Validation toàn diện, kiểm tra file header, rate limiting
-- ✅ **Modern UI**: Responsive design với Tailwind CSS
-- ✅ **Real-time Progress**: Hiển thị tiến trình upload theo thời gian thực
-- ✅ **File Management**: Quản lý và xem thống kê file đã upload
-- ✅ **AWS S3 Integration**: Upload trực tiếp lên Amazon S3 với metadata
+- ✅ **Modern UI**: Giao diện đơn giản, dễ sử dụng
+- ✅ **Real-time Status**: Hiển thị trạng thái upload theo thời gian thực
+- ✅ **File Management**: Theo dõi các file đã upload
+- ✅ **AWS S3 Integration**: Upload trực tiếp lên Amazon S3 qua presigned URL
 
 ## 🛠️ Tech Stack
 
 - **Frontend**: React 18 + TypeScript
 - **Build Tool**: Vite
-- **Styling**: Tailwind CSS
+- **Styling**: Tailwind CSS + Inline Styles
 - **File Upload**: react-dropzone
-- **Icons**: Lucide React
-- **Backend**: AWS Amplify
+- **Backend**: AWS API Gateway + Lambda
 - **Storage**: Amazon S3
-- **Authentication**: AWS Amplify Auth (Guest access enabled)
+- **Authentication**: Presigned URL (không cần authentication)
 
 ## 📋 Yêu cầu hệ thống
 
 - Node.js >= 18.0.0
 - npm >= 8.0.0
-- AWS Account với quyền tạo S3 bucket
-- AWS Amplify CLI
 
 ## 🔧 Cài đặt và thiết lập
 
@@ -36,30 +33,25 @@
 
 ```bash
 git clone <repository-url>
-cd aws-s3-image-uploader
+cd aws-s3-file-uploader
 npm install
 ```
 
-### 2. Cài đặt AWS Amplify CLI
-
-```bash
-npm install -g @aws-amplify/cli
-amplify configure
-```
-
-### 3. Deploy backend infrastructure
-
-```bash
-amplify push
-```
-
-### 4. Chạy ứng dụng development
+### 2. Chạy ứng dụng development
 
 ```bash
 npm run dev
 ```
 
 Ứng dụng sẽ chạy tại `http://localhost:5173`
+
+### 3. Cấu hình API endpoint (nếu cần)
+
+Mở file `src/services/uploadService.ts` và cập nhật `API_BASE_URL`:
+
+```typescript
+const API_BASE_URL = 'https://your-api-gateway-url.amazonaws.com';
+```
 
 ## 🏗️ Kiến trúc hệ thống
 
@@ -68,17 +60,19 @@ graph TB
     subgraph "Client Side"
         A[React App] --> B[ImageUploader Component]
         B --> C[Security Validation]
-        C --> D[File Processing]
+        C --> D[Upload Service]
     end
     
     subgraph "AWS Infrastructure"
-        E[AWS Amplify] --> F[S3 Bucket]
-        E --> G[IAM Roles]
-        E --> H[CloudFront CDN]
+        E[API Gateway] --> F[Lambda Function]
+        F --> G[Generate Presigned URL]
+        G --> H[S3 Bucket]
     end
     
-    D --> E
-    F --> I[Uploaded Images]
+    D -->|1. POST /upload-url| E
+    E -->|2. Return presigned URL| D
+    D -->|3. PUT file to presigned URL| H
+    H --> I[Uploaded Files]
     
     subgraph "Security Layers"
         J[File Type Validation]
@@ -96,7 +90,7 @@ graph TB
 
     style A fill:#e1f5fe
     style E fill:#f3e5f5
-    style F fill:#e8f5e8
+    style H fill:#e8f5e8
     style C fill:#fff3e0
 ```
 
